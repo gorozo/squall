@@ -21,7 +21,7 @@ struct Stub;
 template <>
 struct Stub<void ()> {
     template <class F>
-    static int doit(HSQUIRRELVM vm, SQInteger index, F f) {
+    static int doit(HSQUIRRELVM /*vm*/, SQInteger /*index*/, F f) {
         f();
         return 0;
     }
@@ -30,8 +30,12 @@ struct Stub<void ()> {
 template <class R>
 struct Stub<R ()> {
     template <class F>
-    static int doit(HSQUIRRELVM vm, SQInteger index, F f) {
+    static int doit(HSQUIRRELVM vm, SQInteger /*index*/, F f) {
+#ifndef ADDITION_DISABLE
+       push_returnvalue(vm, f());
+#else
         push<R>(vm, f());
+#endif
         return 1;
     }
 };
@@ -40,14 +44,30 @@ template <class R, class H, class... T>
 struct Stub<R (H, T...)> {
     template <class F>
     static int doit(HSQUIRRELVM vm, SQInteger index, F f) {
+
         auto newf =
             partial(
                 f,
                 unwrap_type(
                     fetch<H, detail::FetchContext::Argument>(vm, index)));
         return Stub<R (T...)>::doit(vm, index+1, newf);
+
     }
 };
+
+#ifndef ADDITION_DISABLE
+template <class R,  class... T>
+struct Stub<R (HSQUIRRELVM, T...)> {
+    template <class F>
+    static int doit(HSQUIRRELVM vm, SQInteger index, F f) {
+
+        //vmÇªÇÃÇ‡ÇÃÇà¯êîÇ∆ÇµÇƒìnÇ∑
+        auto newf = partial(f, vm);
+               
+       return Stub<R(T...)>::doit(vm, index, newf);
+    }
+};
+#endif
 
 /*
 inline
@@ -84,7 +104,14 @@ template <> inline SQChar typemask<float>() { return _SC('f'); }
 template <> inline SQChar typemask<bool>() { return _SC('b'); }
 template <> inline SQChar typemask<const SQChar*>() { return _SC('s'); }
 template <> inline SQChar typemask<string>() { return _SC('s'); }
-
+#ifndef ADDITION_DISABLE
+template <> inline SQChar typemask<HSQUIRRELVM>() { return 0; }
+/*
+template <> inline SQChar typemask<SQObject>() {
+    return _SC('x'); //instance/
+}
+*/
+#endif
 template <class... T>
 struct TypeMaskList;
 
@@ -96,7 +123,18 @@ struct TypeMaskList<> {
 template <class H, class... T>
 struct TypeMaskList<H, T...> {
     static string doit() {
+#ifdef ADDITION_DISABLE
         return typemask<H>() + TypeMaskList<T...>::doit();
+#else
+        auto c = typemask<H>();
+        if (c) {
+            return c + TypeMaskList<T...>::doit();
+        }
+        else {
+            return TypeMaskList<T...>::doit();
+        }
+
+#endif
     }
 };
 
@@ -158,6 +196,62 @@ void push_closure(HSQUIRRELVM vm, std::function<R (A...)> v) {
     sq_setparamscheck(vm, SQ_MATCHTYPEMASKSTRING, argtypemask.c_str());
     sq_setnativeclosurename(vm, -1, _SC("<C++ lambda>"));
 }
+
+#ifndef ADDITION_DISABLE
+
+template <class T>
+SQInteger createinstanceup(HSQUIRRELVM vm) {
+
+    auto index = 0;
+    HSQOBJECT sqo;
+    if (klass_table(vm).find_klass_object<T>(sqo)) {
+        //OT_INSTANCE --> T*
+
+        SQUserPointer r;
+        sq_getinstanceup(vm, index, &r, NULL);
+
+        if (r == nullptr) {
+            r = new T();
+
+            sq_setinstanceup(vm, index, r);
+            SQRELEASEHOOK hook = [](SQUserPointer p, SQInteger)->SQInteger {
+                delete (T*)p;
+                return 0;
+            };
+            sq_setreleasehook(vm, index, hook);
+
+
+        }
+
+    }
+    else {
+        throw squirrel_error("constructorÇ≈ÇµÇ©åƒÇŒÇÍÇ»Ç¢ÇÃÇ≈Ç±Ç±Ç…ÇÕóàÇÈÇÕÇ∏Ç»Ç¢");
+    }
+    return 0;
+}
+
+template <class C>
+void defctor(
+    HSQUIRRELVM vm, const HSQOBJECT& klass_object
+    ) {
+
+    defraw(vm, klass_object,
+        L"constructor",
+        createinstanceup<C>
+
+        /* ÉâÉÄÉ_Ç≈èëÇ≠Ç∆ÉfÉoÉbÉKÇ≈å^Ç™ÇÌÇ©ÇËÇ…Ç≠Ç¢ÇÃÇ≈Ç‚ÇﬂÅB
+        [](HSQUIRRELVM v)->SQInteger {
+            new C();
+            return 0;
+        }
+        */
+    );
+}
+
+
+
+#endif
+
 
 }
 

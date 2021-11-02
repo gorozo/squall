@@ -15,7 +15,11 @@ public:
         : vm_(c.vm_), top_(c.top_), suspended_(c.suspended_) {
         c.vm_ = nullptr;
     }
-    ~Coroutine() { if (vm_) { sq_settop(vm_, top_); } }
+    ~Coroutine() {
+#ifdef ADDITION_DISABLE  //ˆÚ÷‚µ‚½‚Æ‚«‚ÉŸè‚É‘‚«‚©‚ç‚ê‚é‚Æ¢‚é
+        if (vm_) { sq_settop(vm_, top_); }
+#endif
+    }
 
     Coroutine& operator=(Coroutine&& c) {
         vm_ = c.vm_;
@@ -29,7 +33,15 @@ public:
     template <class R>
     R yielded() {
         validate_vm();
+        
+
+#ifndef ADDITION_DISABLE
+        auto r = detail::fetch<R, detail::FetchContext::YieldedValue>(vm_, -1);
+        sq_poptop(vm_);
+        return r;
+#else
         return detail::fetch<R, detail::FetchContext::YieldedValue>(vm_, -1);
+#endif
     }
 
     template <class R>

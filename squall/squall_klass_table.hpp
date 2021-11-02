@@ -7,9 +7,29 @@
 #include "squall_utility.hpp"
 #include "squall_exception.hpp"
 
+
+//std::remove_cv -> remove_cv’u‚«Š·‚¦
+
+template<typename T>
+struct remove_cv {
+    typedef typename std::remove_cv<T>::type type;
+};
+
+
+template<typename T>
+struct remove_cv<std::shared_ptr<T>> {
+    typedef typename std::remove_cv<T>::type type;
+};
+
+
+
+
+
+
 namespace squall {
 
 namespace detail {
+
 
 ////////////////////////////////////////////////////////////////
 // klass base
@@ -156,6 +176,13 @@ private:
     
 
 public:
+    ~KlassTable() {
+        if (klasses_.size() > 0) {
+            klasses_.clear();
+            printf("\n");
+        }
+    }
+
     template <class C, class Base>
     struct KlassAdd {
         static
@@ -172,16 +199,16 @@ public:
     struct KlassAdd<C, void> {
         static
         std::shared_ptr<detail::KlassImp<C>>
-        doit(const klasses_type& klasses, HSQUIRRELVM vm, const string& name) {
+        doit(const klasses_type& /*klasses*/, HSQUIRRELVM vm, const string& name) {
             return std::make_shared<detail::KlassImp<C>>(vm, name);
         }
     };
 
 
     template <class C, class Base>
-    std::weak_ptr<detail::KlassImp<typename std::remove_cv<C>::type>>
+    std::weak_ptr<detail::KlassImp<typename remove_cv<C>::type>>
     add_klass(HSQUIRRELVM vm, const string& name) {
-        typedef typename std::remove_cv<C>::type CC;
+        typedef typename remove_cv<C>::type CC;
         size_t h = detail::KlassImp<CC>::hash();
         auto i = klasses_.find(h);
         if (i == klasses_.end()) {
@@ -196,7 +223,7 @@ public:
 
     template <class C>
     bool find_klass_object(HSQOBJECT& obj) {
-        typedef typename std::remove_cv<C>::type CC;
+        typedef typename remove_cv<C>::type CC;
         size_t h = detail::KlassImp<CC>::hash();
         auto i = klasses_.find(h);
         if (i == klasses_.end()) {
@@ -214,9 +241,14 @@ private:
 
 };
 
+
 inline
 KlassTable& klass_table(HSQUIRRELVM vm) {
+#ifdef ADDITION_DISABLE
     return *((KlassTable*)sq_getforeignptr(vm));
+#else
+    return *((KlassTable*)sq_getsharedforeignptr(vm));
+#endif
 }
 
 }

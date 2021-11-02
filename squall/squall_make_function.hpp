@@ -20,32 +20,50 @@ struct functor_traits<T (C::*)(A...) const> {
     typedef T type(A...);
 };
  
-template <typename F>
+//------------------------
+template <typename C, bool Shared = false>
+struct shared_type {
+    typedef C* type;
+    typedef const C* ctype;
+};
+
+template <typename C>
+struct shared_type<C, true> {
+    typedef std::shared_ptr<C> type;
+    typedef std::shared_ptr<const C> ctype;
+};
+
+//------------------------------------
+
+template <typename F,bool Shared = false>
 struct function_traits
     : public functor_traits<decltype(&F::operator())> {
 };
 
-template <class T, class C, class... A>
-struct function_traits<T (C::*)(A...)> {
-    typedef T type(C*, A...);
+
+template <class T, class C, class... A,bool Shared>
+struct function_traits<T (C::*)(A...),Shared> {
+   // typedef T type(C*, A...);
+    typedef T type(typename shared_type<C,Shared>::type, A...);
 };
 
-template <class T, class C, class... A>
-struct function_traits<T (C::*)(A...) const> {
-    typedef T type(const C*, A...);
+template <class T, class C, class... A,bool Shared>
+struct function_traits<T (C::*)(A...) const,Shared> {
+    //typedef T type(const C*, A...);
+    typedef T type(typename shared_type<C,Shared>::ctype, A...);
 };
  
-template <class T, class... A>
-struct function_traits<T (*)(A...)> {
+template <class T, class... A,bool Shared>
+struct function_traits<T (*)(A...),Shared> {
     typedef T type(A...);
 };
 
 }
 
-template <class F>
-std::function<typename detail::function_traits<F>::type>
+template <class F,bool Shared = false>
+auto //std::function<typename detail::function_traits<F>::type>
 to_function(F f) {
-    return std::function<typename detail::function_traits<F>::type>(f);
+    return std::function<typename detail::function_traits<F,Shared>::type>(f);
 }
 
 }

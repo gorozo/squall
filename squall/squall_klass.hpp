@@ -9,11 +9,18 @@
 
 namespace squall {
 
-template <class C, class Base = void>
+template <class C, bool  Shared = false,class Base = void>
 class Klass {
 public:
-    Klass(VM& vm, const string& name) : vm_(vm) {
+    Klass(VM& vm, const string& name) : vm_(vm){
+#ifdef ADDITION_DISABLE
         imp_ = vm.klass_table().add_klass<C, Base>(vm_.handle(), name);
+#else 
+        imp_ = vm.klass_table().add_klass<C, Base>(vm_.rootHandle(), name);
+        //コンストラクタは自動で追加
+        defctor();
+#endif
+
     }
     ~Klass() { imp_.lock()->close(); }
 
@@ -23,36 +30,47 @@ public:
     void operator=(const Klass&&) = delete;
     
     template <class F>
-    Klass<C, Base>& func(const SQChar* name, F f) {
+    Klass& func(const SQChar* name, F f) {
         func(string(name), f);
         return *this;
     }
 
     template <class F>
-    Klass<C, Base>& func(const string& name, F f) {
+    Klass& func(const string& name, F f) {
         detail::defun_local(
             vm_.handle(),
             imp_.lock()->get_klass_object(),
             name,
-            to_function(f));
+            to_function<F,Shared>(f));
         return *this;
     }
+#ifndef ADDITION_DISABLE
+    Klass& defctor() {
+        //デフォルトコンストラクタでnewするデリゲートを登録する
+        detail::defctor<C>(
+            vm_.handle(),
+            imp_.lock()->get_klass_object()
+        );
+        return *this;
+    }
+#endif
 
     template <class V>
-    Klass<C, Base>& var(const string& name, V C::* r) {
+    Klass& var(const string& name, V C::* r) {
         auto& imp = *imp_.lock();
-        detail::defvar_local(
+        detail::defvar_local<C,V,Shared>(
             vm_.handle(),
             imp.get_getter_table(),
             imp.get_setter_table(),
             name,
-            r);
+            r
+            );
         return *this;
     }
 
     template <class V>
-    Klass<C, Base>& var(const string& name, const V C::* r) {
-        detail::defvar_local_const(
+    Klass& var(const string& name, const V C::* r) {
+        detail::defvar_local_const<C,V,Shared>(
             vm_.handle(),
             imp_.lock()->get_getter_table(),
             name,
@@ -61,32 +79,33 @@ public:
     }
 
     template <class GF>
-    Klass<C, Base>& prop(const string& name, GF gf) {
+    Klass& prop(const string& name, GF gf) {
         auto& imp = *imp_.lock();
         detail::defprop(
             vm_.handle(),
             imp.get_getter_table(),
             name,
-            to_function(gf));
+            to_function<GF,Shared>(gf));
         return *this;
     }
 
     template <class GF, class SF>
-    Klass<C, Base>& prop(const string& name, GF gf, SF sf) {
+    Klass& prop(const string& name, GF gf, SF sf) {
         auto& imp = *imp_.lock();
         detail::defprop(
             vm_.handle(),
             imp.get_getter_table(),
             imp.get_setter_table(),
             name,
-            to_function(gf),
-            to_function(sf));
+            to_function<GF,Shared>(gf),
+            to_function<SF,Shared>(sf));
         return *this;
     }
     
 private:
     VM& vm_;
     std::weak_ptr<detail::KlassImp<C>> imp_;
+
 
 };
 

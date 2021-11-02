@@ -19,11 +19,32 @@ namespace squall {
 
 namespace detail {
 
-template <class C, class V> inline
+template <typename C,bool Shared>
+C* get_class_pointer(HSQUIRRELVM vm, int index = 1) {
+
+    if (Shared) {
+        std::shared_ptr<C>* s;
+        sq_getinstanceup(vm, 1, (SQUserPointer*)&s, nullptr);
+
+        return s->get();
+    }
+    else {
+        C* p;
+        sq_getinstanceup(vm, 1, (SQUserPointer*)&p, nullptr);
+        return p;
+    }
+
+}
+
+template <class C, class V, bool Shared> inline
 SQInteger var_getter(HSQUIRRELVM vm) {
+    /*
     C* p = nullptr;
     sq_getinstanceup(vm, 1, (SQUserPointer*)&p, nullptr);
-		
+    */
+    auto* p = get_class_pointer<C, Shared>(vm);
+
+    
     typedef V C::*M;
     M* mp = nullptr;
     sq_getuserdata(vm, -1, (SQUserPointer*)&mp, nullptr);
@@ -34,10 +55,17 @@ SQInteger var_getter(HSQUIRRELVM vm) {
     return 1;
 }
 
-template <class C, class V> inline
+
+
+template <class C, class V, bool Shared> inline
 SQInteger var_setter(HSQUIRRELVM vm) {
-    C* p = nullptr;
-    sq_getinstanceup(vm, 1, (SQUserPointer*)&p, nullptr);
+
+    /*
+  C* p = nullptr;
+  sq_getinstanceup(vm, 1, (SQUserPointer*)&p, nullptr);
+  */
+    auto* p = get_class_pointer<C, Shared>(vm);
+
 		
     typedef V C::*M;
     M* mp = nullptr;
@@ -48,6 +76,8 @@ SQInteger var_setter(HSQUIRRELVM vm) {
 
     return 0;
 }
+
+
 
 template <class M> inline
 void bind_accessor(
@@ -68,26 +98,28 @@ void bind_accessor(
     sq_pop(vm, 1);
 }
 
-template <class C, class V> inline
+template <class C, class V,bool Shared> inline
 void defvar_local_const(
     HSQUIRRELVM     vm,
     HSQOBJECT       getter_table,
     const string&   name,
     const V C::*    var) {
 
-    bind_accessor(vm, getter_table, name, var, &var_getter<C, V>);
+    bind_accessor(vm, getter_table, name, var, &var_getter<C, V,Shared>);
 }
 
-template <class C, class V> inline
+template <class C, class V,bool Shared> inline
 void defvar_local(
     HSQUIRRELVM     vm,
     HSQOBJECT       getter_table,
     HSQOBJECT       setter_table,
     const string&   name,
-    V C::*          var) {
+    V C::*          var
+    ) {
 
-    bind_accessor(vm, getter_table, name, var, &var_getter<C, V>);
-    bind_accessor(vm, setter_table, name, var, &var_setter<C, V>);
+
+    bind_accessor(vm, getter_table, name, var, &var_getter<C, V,Shared>);
+    bind_accessor(vm, setter_table, name, var, &var_setter<C, V,Shared>);
 }
 
 template <class V, class C>

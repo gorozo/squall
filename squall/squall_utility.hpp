@@ -66,10 +66,22 @@ template <class T> struct wrapped_type {
     typedef T wrapper_type;
     typedef T value_type;
 };
+
+
 template <class T> struct wrapped_type<T*> {
     typedef T* wrapper_type;
     typedef T* value_type;
 };
+
+
+/*
+template<class T> struct wrapped_type<std::shared_ptr<T>> {
+    typedef T* wrapper_type;
+    typedef std::shared_ptr<T> value_type;
+};
+*/
+
+
 template <> struct wrapped_type<const SQChar*> {
     typedef string_wrapper  wrapper_type;
     typedef string          value_type;
@@ -104,6 +116,12 @@ template <class T> struct unwrapped_type<T*> {
 template <> struct unwrapped_type<string_wrapper> {
     typedef const SQChar* value_type;
 };
+
+/*
+template <class T> struct unwrapped_type<std::shared_ptr<T>> {
+    typedef T* value_type;
+};
+*/
 
 template <class T>
 typename unwrapped_type<T>::value_type

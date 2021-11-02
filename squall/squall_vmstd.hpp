@@ -41,6 +41,12 @@ public:
         sqstd_seterrorhandlers(handle());
         sq_setprintfunc(handle(), &detail::pf<SQChar>, &detail::pf<SQChar>);
     }
+#ifndef ADDITION_DISABLE
+    VMStd(VM& parentVM, int stack_size = 1024) : VM(parentVM,stack_size) {
+        //ルートテーブルへ登録するやつはもうやらなくていいはず
+        sqstd_seterrorhandlers(handle());
+    }
+#endif
 
     void dofile(const SQChar* filename) {
         keeper k(handle());
@@ -49,6 +55,27 @@ public:
             throw squirrel_error("dofile failed");
         }
     }
+
+#ifndef ADDITION_DISABLE 
+    void loadfile(const SQChar* filename) {
+        auto v = handle();
+        keeper k(handle());
+        sq_pushroottable(v);
+        if (SQ_SUCCEEDED(sqstd_loadfile(v, filename,1))) {
+            sq_push(v, -2);
+            if (SQ_SUCCEEDED(sq_call(v, 1, 0, SQTrue))) {
+                sq_remove(v, -1); //removes the closure
+                return;
+            }
+            sq_pop(v, 1);//removesthe closure;
+            return;
+        }
+
+        throw squirrel_error("dofile failed");
+    }
+
+
+#endif
 
     void dostring(const SQChar* source) {
         keeper k(handle());
