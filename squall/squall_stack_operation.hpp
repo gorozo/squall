@@ -318,8 +318,8 @@ struct Fetch<tagSQObject, FC> {
     static T doit(HSQUIRRELVM vm, SQInteger index) {
         auto t = sq_gettype(vm, index);
 
-        if (t != OT_INSTANCE) {
-            throw squirrel_error("must be OT_INSTANCE.");
+        if (t != OT_INSTANCE && t != OT_TABLE) {
+            throw squirrel_error("must be OT_INSTANCE or OT_TABLE.");
         }
         
         T tag;
